@@ -170,6 +170,195 @@ clockManagerCallbackRoutine(clock_notify_struct_t *  notify, void *  callbackDat
 	return result;
 }
 
+// TODO: add pin states for pan1326 lp states
+void
+lowPowerPinStates(void)
+{
+	/*
+	 *	Following Section 5 of "Power Management for Kinetis L Family" (AN5088.pdf),
+	 *	we configure all pins as output and set them to a known state. We choose
+	 *	to set them all to '0' since it happens that the devices we want to keep
+	 *	deactivated (SI4705, PAN1326) also need '0'.
+	 */
+
+	/*
+	 *			PORT A
+	 */
+	/*
+	 *	For now, don't touch the PTA0/1/2 SWD pins. Revisit in the future.
+	 */
+	/*
+	PORT_HAL_SetMuxMode(PORTA_BASE, 0, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 1, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 2, kPortMuxAsGpio);
+	*/
+
+	/*
+	 *	PTA3 and PTA4 are the EXTAL/XTAL
+	 */
+	PORT_HAL_SetMuxMode(PORTA_BASE, 3, kPortPinDisabled);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 4, kPortPinDisabled);
+
+	PORT_HAL_SetMuxMode(PORTA_BASE, 5, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 6, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 7, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 8, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTA_BASE, 9, kPortMuxAsGpio);
+
+	/*
+	 *	NOTE: The KL03 has no PTA10 or PTA11
+	 */
+
+	PORT_HAL_SetMuxMode(PORTA_BASE, 12, kPortMuxAsGpio);
+
+
+
+	/*
+	 *			PORT B
+	 */
+	PORT_HAL_SetMuxMode(PORTB_BASE, 0, kPortMuxAsGpio);
+
+	/*
+	 *	PTB1 is connected to KL03_VDD. We have a choice of:
+	 *		(1) Keep 'disabled as analog'.
+	 *		(2) Set as output and drive high.
+	 *
+	 *	Pin state "disabled" means default functionality (ADC) is _active_
+	 */
+	if (gWarpMode & kWarpModeDisableAdcOnSleep)
+	{
+		PORT_HAL_SetMuxMode(PORTB_BASE, 1, kPortMuxAsGpio);
+	}
+	else
+	{
+		PORT_HAL_SetMuxMode(PORTB_BASE, 1, kPortPinDisabled);
+	}
+
+	PORT_HAL_SetMuxMode(PORTB_BASE, 2, kPortMuxAsGpio);
+
+	/*
+	 *	PTB3 and PTB3 (I2C pins) are true open-drain
+	 *	and we purposefully leave them disabled.
+	 */
+	PORT_HAL_SetMuxMode(PORTB_BASE, 3, kPortPinDisabled);
+	PORT_HAL_SetMuxMode(PORTB_BASE, 4, kPortPinDisabled);
+
+
+	PORT_HAL_SetMuxMode(PORTB_BASE, 5, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTB_BASE, 6, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTB_BASE, 7, kPortMuxAsGpio);
+
+	/*
+	 *	NOTE: The KL03 has no PTB8 or PTB9
+	 */
+
+	PORT_HAL_SetMuxMode(PORTB_BASE, 10, kPortMuxAsGpio);
+	PORT_HAL_SetMuxMode(PORTB_BASE, 11, kPortMuxAsGpio);
+
+	/*
+	 *	NOTE: The KL03 has no PTB12
+	 */
+
+	PORT_HAL_SetMuxMode(PORTB_BASE, 13, kPortMuxAsGpio);
+
+
+
+	/*
+	 *	Now, set all the pins (except kWarpPinKL03_VDD_ADC, the SWD pins, and the XTAL/EXTAL) to 0
+	 */
+
+
+
+	/*
+	 *	If we are in mode where we disable the ADC, then drive the pin high since it is tied to KL03_VDD
+	 */
+	if (gWarpMode & kWarpModeDisableAdcOnSleep)
+	{
+		GPIO_DRV_SetPinOutput(kWarpPinKL03_VDD_ADC);
+	}
+#ifndef WARP_BUILD_ENABLE_THERMALCHAMBERANALYSIS
+#ifdef WARP_BUILD_ENABLE_DEVPAN1326
+	GPIO_DRV_ClearPinOutput(kWarpPinPAN1326_nSHUTD);
+#endif
+#endif
+
+	GPIO_DRV_ClearPinOutput(kWarpPinTPS82740A_CTLEN);
+	GPIO_DRV_ClearPinOutput(kWarpPinTPS82740B_CTLEN);
+	GPIO_DRV_ClearPinOutput(kWarpPinTPS82740_VSEL1);
+	GPIO_DRV_ClearPinOutput(kWarpPinTPS82740_VSEL2);
+	GPIO_DRV_ClearPinOutput(kWarpPinTPS82740_VSEL3);
+
+#ifndef WARP_BUILD_ENABLE_THERMALCHAMBERANALYSIS
+	GPIO_DRV_ClearPinOutput(kWarpPinCLKOUT32K);
+#endif
+
+	GPIO_DRV_ClearPinOutput(kWarpPinTS5A3154_IN);
+	GPIO_DRV_ClearPinOutput(kWarpPinSI4705_nRST);
+
+	/*
+	 *	Drive these chip selects high since they are active low:
+	 */
+#ifndef WARP_BUILD_ENABLE_THERMALCHAMBERANALYSIS
+	GPIO_DRV_SetPinOutput(kWarpPinISL23415_nCS);
+#endif
+#ifdef WARP_BUILD_ENABLE_DEVADXL362
+	GPIO_DRV_SetPinOutput(kWarpPinADXL362_CS);
+#endif
+
+	/*
+	 *	When the PAN1326 is installed, note that it has the
+	 *	following pull-up/down by default:
+	 *
+	 *		HCI_RX / kWarpPinI2C0_SCL	: pull up
+	 *		HCI_TX / kWarpPinI2C0_SDA	: pull up
+	 *		HCI_RTS / kWarpPinSPI_MISO	: pull up
+	 *		HCI_CTS / kWarpPinSPI_MOSI	: pull up
+	 *
+	 *	These I/Os are 8mA (see panasonic_PAN13xx.pdf, page 10),
+	 *	so we really don't want to be driving them low. We
+	 *	however also have to be careful of the I2C pullup and
+	 *	pull-up gating. However, driving them high leads to
+	 *	higher board power dissipation even when SSSUPPLY is off
+	 *	by ~80mW on board #003 (PAN1326 populated).
+	 *
+	 *	In revB board, with the ISL23415 DCP pullups, we also
+	 *	want I2C_SCL and I2C_SDA driven high since when we
+	 *	send a shutdown command to the DCP it will connect
+	 *	those lines to 25570_VOUT.
+	 *
+	 *	For now, we therefore leave the SPI pins low and the
+	 *	I2C pins (PTB3, PTB4, which are true open-drain) disabled.
+	 */
+
+	GPIO_DRV_ClearPinOutput(kWarpPinI2C0_SDA);
+	GPIO_DRV_ClearPinOutput(kWarpPinI2C0_SCL);
+	GPIO_DRV_ClearPinOutput(kWarpPinSPI_MOSI);
+	GPIO_DRV_ClearPinOutput(kWarpPinSPI_MISO);
+	GPIO_DRV_ClearPinOutput(kWarpPinSPI_SCK);
+
+	/*
+	 *	HCI_RX / kWarpPinI2C0_SCL is an input. Set it low.
+	 */
+	//GPIO_DRV_SetPinOutput(kWarpPinI2C0_SCL);
+
+	/*
+	 *	HCI_TX / kWarpPinI2C0_SDA is an output. Set it high.
+	 */
+	//GPIO_DRV_SetPinOutput(kWarpPinI2C0_SDA);
+
+	/*
+	 *	HCI_RTS / kWarpPinSPI_MISO is an output. Set it high.
+	 */
+	//GPIO_DRV_SetPinOutput(kWarpPinSPI_MISO);
+
+	/*
+	 *	From PAN1326 manual, page 10:
+	 *
+	 *		"When HCI_CTS is high, then CC256X is not allowed to send data to Host device"
+	 */
+	//GPIO_DRV_SetPinOutput(kWarpPinSPI_MOSI);
+}
+
 
 /*
  *	Override the RTC IRQ handler
@@ -340,12 +529,6 @@ disableI2Cpins(void)
 	/*	Warp KL03_I2C0_SDA	--> PTB4	(GPIO)			*/
 	PORT_HAL_SetMuxMode(PORTB_BASE, 4, kPortMuxAsGpio);
 
-
-	/*
-	 *	Reset DCP configuration
-	 */
-	configureI2Cpins(0x80); /* Defaults DCP configuration ISL datasheet FN7780 Rev 2.00 - page 14 */
-
 	/*
 	 *	Drive the I2C pins low
 	 */
@@ -368,14 +551,7 @@ warpLowPowerSecondsSleep(uint32_t sleepSeconds, bool forceAllPinsIntoLowPowerSta
 int
 main(void)
 {
-	uint8_t					key;
-	WarpSensorDevice			menuTargetSensor;
-	volatile WarpI2CDeviceState *		menuI2cDevice = NULL;
 	uint16_t				menuI2cPullupValue = 32768;
-	uint8_t					menuRegisterAddress = 0x00;
-	uint16_t				menuSupplyVoltage = 0;
-
-
 	rtc_datetime_t				warpBootDate;
 
 	power_manager_user_config_t		warpPowerModeWaitConfig;
@@ -543,7 +719,7 @@ main(void)
 	 *	See also Section 30.3.3 GPIO Initialization of KSDK13APIRM.pdf
 	 */
 	GPIO_DRV_Init(inputPins  /* input pins */, outputPins  /* output pins */);
-
+	lowPowerPinStates();
 	/*
 	 *	Initialize all the sensors
 	 */
